@@ -17,7 +17,7 @@ app.use(
 );
 
 // Better Auth handles all /api/auth/* routes
-app.all("/api/auth/*", toNodeHandler(auth));
+app.all("/api/auth/{*path}", toNodeHandler(auth));
 
 app.use(express.json());
 
