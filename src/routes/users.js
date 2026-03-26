@@ -67,7 +67,7 @@ router.post("/", requireRole("admin"), async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const bcrypt = require("bcrypt");
+    const bcrypt = require("bcryptjs");
     const hashed = await bcrypt.hash(password, 10);
 
     const result = await db.query(
