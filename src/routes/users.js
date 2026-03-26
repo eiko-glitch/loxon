@@ -84,11 +84,11 @@ router.post("/", requireRole("admin"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+const bcrypt = require("bcryptjs");
 
-// PATCH /api/users/:id — update user
 router.patch("/:id", requireRole("admin"), async (req, res) => {
   try {
-    const { name, email, role, status, team_id } = req.body;
+    const { name, email, role, status, team_id, password } = req.body;
 
     if (role && !["supervisor", "engineer"].includes(role)) {
       return res
@@ -96,19 +96,23 @@ router.patch("/:id", requireRole("admin"), async (req, res) => {
         .json({ error: "Can only set supervisor or engineer" });
     }
 
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+
     const result = await db.query(
       `UPDATE users
        SET
-         name     = COALESCE($1, name),
-         email    = COALESCE($2, email),
-         role     = COALESCE($3, role),
-         status   = COALESCE($4, status),
-         team_id  = COALESCE($5, team_id),
+         name       = COALESCE($1, name),
+         email      = COALESCE($2, email),
+         role       = COALESCE($3, role),
+         status     = COALESCE($4, status),
+         team_id    = COALESCE($5, team_id),
+         password   = COALESCE($6, password),
          updated_at = NOW()
-       WHERE id = $6
+       WHERE id = $7
        RETURNING id, name, email, role, status, team_id`,
-      [name, email, role, status, team_id, req.params.id],
+      [name, email, role, status, team_id, hashedPassword, req.params.id],
     );
+
     if (result.rows.length === 0)
       return res.status(404).json({ error: "User not found" });
     res.json(result.rows[0]);
@@ -119,7 +123,6 @@ router.patch("/:id", requireRole("admin"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 // DELETE /api/users/:id — delete user
 router.delete("/:id", requireRole("admin"), async (req, res) => {
   try {
