@@ -1,3 +1,4 @@
+const { requireAuth } = require("./middleware/requireAuth");
 const express = require("express");
 const cors = require("cors");
 const PORT = process.env.PORT || 3000;
