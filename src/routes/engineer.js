@@ -12,6 +12,25 @@ router.use(requireRole("engineer"));
  * GET /api/engineer/forms/assigned
  * Section 1: forms assigned to me by supervisor (pending)
  */
+
+router.get("/supervisors", async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name FROM users u
+       JOIN users me ON me.team_id = u.team_id
+       WHERE me.id = $1
+         AND u.role = 'supervisor'
+         AND u.status != 'inactive'
+       ORDER BY u.name`,
+      [req.user.id],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.get("/forms/assigned", async (req, res) => {
   try {
     const { rows } = await db.query(
