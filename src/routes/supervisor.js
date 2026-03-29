@@ -196,9 +196,9 @@ router.patch("/forms/:id/accept", async (req, res) => {
       `UPDATE forms
        SET status = 'accepted', updated_at = NOW()
        WHERE id = $1
-         AND assigned_to = $2
+         AND (assigned_to = $2 OR created_by = $2)
          AND status = 'pending'
-       RETURNING id, assigned_to`,
+       RETURNING id, created_by, assigned_to`,
       [id, supervisorId],
     );
 
@@ -207,10 +207,15 @@ router.patch("/forms/:id/accept", async (req, res) => {
         .status(404)
         .json({ message: "Form not found or not pending." });
 
+    const workerId =
+      rows[0].created_by === supervisorId
+        ? rows[0].assigned_to // supervisor made it → engineer is assigned_to
+        : rows[0].created_by; // engineer made it → engineer is created_by
+
     await db.query(
       `INSERT INTO tracking (form_id, worker_id, status, started_at, updated_at)
        VALUES ($1, $2, 'ongoing', NOW(), NOW())`,
-      [rows[0].id, rows[0].assigned_to],
+      [rows[0].id, workerId],
     );
 
     res.json({ message: "Form accepted." });
