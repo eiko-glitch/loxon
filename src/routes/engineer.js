@@ -546,4 +546,21 @@ router.post("/attachments", async (req, res) => {
   }
 });
 
+// DELETE /api/engineer/attachments/:id
+router.delete("/attachments/:id", async (req, res) => {
+  try {
+    const { rowCount } = await db.query(
+      `DELETE FROM attachments 
+       WHERE id = $1 AND uploaded_by = $2`,
+      [req.params.id, req.user.id],
+    );
+    if (!rowCount)
+      return res.status(404).json({ message: "Attachment not found." });
+    res.json({ message: "Attachment deleted." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;
