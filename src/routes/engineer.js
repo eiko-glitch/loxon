@@ -522,4 +522,28 @@ router.get("/records", async (req, res) => {
   }
 });
 
+// POST /api/engineer/attachments
+router.post("/attachments", async (req, res) => {
+  const { form_id, urls, type = "form_doc" } = req.body;
+
+  if (!form_id || !urls?.length) {
+    return res.status(400).json({ message: "form_id and urls required." });
+  }
+
+  try {
+    const inserts = urls.map((url) =>
+      db.query(
+        `INSERT INTO attachments (form_id, type, uploaded_by, file_url)
+         VALUES ($1, $2, $3, $4)`,
+        [form_id, type, req.user.id, url],
+      ),
+    );
+    await Promise.all(inserts);
+    res.json({ message: "Attachments saved." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;
