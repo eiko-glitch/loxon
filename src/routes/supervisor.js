@@ -1,24 +1,17 @@
+// routes/supervisor.js
 const express = require("express");
 const router = express.Router();
 const db = require("../lib/db");
 const { requireRole } = require("../middleware/requireAuth");
 
-// All routes here already have requireAuth applied at index.js level.
-// Additionally gate to supervisor only:
 router.use(requireRole("supervisor"));
 
-// ─── MEMBERS ────────────────────────────────────────────────────────────────
+// ─── MEMBERS ─────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/supervisor/members
- * Returns engineers (role=engineer) that belong to the same team as the supervisor,
- * or all engineers if the supervisor has no team.
- */
 router.get("/members", async (req, res) => {
   try {
     const supervisorId = req.user.id;
 
-    // Get supervisor's team
     const { rows: supRows } = await db.query(
       "SELECT team_id FROM users WHERE id = $1",
       [supervisorId],
@@ -57,10 +50,6 @@ router.get("/members", async (req, res) => {
 
 // ─── FORMS ───────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/supervisor/forms/pending
- * Returns all pending forms that this supervisor created or that belong to their team's members.
- */
 router.get("/forms/pending", async (req, res) => {
   try {
     const supervisorId = req.user.id;
@@ -92,10 +81,7 @@ router.get("/forms/pending", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-/**
- * GET /api/supervisor/forms/:id
- * Returns full form detail including attachments and linked tracking_id.
- */
+
 router.get("/forms/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -137,12 +123,7 @@ router.get("/forms/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-/**
- * POST /api/supervisor/forms
- * Create a new form and assign to a member.
- * Body: { title, description, client_name, company_name, priority_level,
- *         date_from, date_to, duration, assigned_to, comment }
- */
+
 router.post("/forms", async (req, res) => {
   try {
     const supervisorId = req.user.id;
@@ -170,7 +151,6 @@ router.post("/forms", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    // Validate assigned_to is an engineer
     const { rows: memberRows } = await db.query(
       "SELECT id FROM users WHERE id = $1 AND role = 'engineer' AND status != 'inactive'",
       [assigned_to],
@@ -207,10 +187,6 @@ router.post("/forms", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/supervisor/forms/:id/accept
- * Supervisor accepts a pending form → status becomes 'accepted'.
- */
 router.patch("/forms/:id/accept", async (req, res) => {
   try {
     const { id } = req.params;
@@ -219,8 +195,8 @@ router.patch("/forms/:id/accept", async (req, res) => {
     const { rowCount, rows } = await db.query(
       `UPDATE forms
        SET status = 'accepted', updated_at = NOW()
-       WHERE id = $1 
-         AND assigned_to = $2 
+       WHERE id = $1
+         AND assigned_to = $2
          AND status = 'pending'
        RETURNING id, assigned_to`,
       [id, supervisorId],
@@ -243,10 +219,7 @@ router.patch("/forms/:id/accept", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-/**
- * PATCH /api/supervisor/forms/:id/reject
- * Supervisor rejects a pending form → status becomes 'rejected'.
- */
+
 router.patch("/forms/:id/reject", async (req, res) => {
   try {
     const { id } = req.params;
@@ -255,8 +228,8 @@ router.patch("/forms/:id/reject", async (req, res) => {
     const { rowCount } = await db.query(
       `UPDATE forms
        SET status = 'rejected', updated_at = NOW()
-       WHERE id = $1 
-         AND assigned_to = $2 
+       WHERE id = $1
+         AND assigned_to = $2
          AND status = 'pending'`,
       [id, supervisorId],
     );
@@ -275,10 +248,6 @@ router.patch("/forms/:id/reject", async (req, res) => {
 
 // ─── JOBS (TRACKING) ─────────────────────────────────────────────────────────
 
-/**
- * GET /api/supervisor/jobs/awaiting-verification
- * Returns tracking rows with status='completed' where the form was created by this supervisor.
- */
 router.get("/jobs/awaiting-verification", async (req, res) => {
   try {
     const supervisorId = req.user.id;
@@ -310,10 +279,6 @@ router.get("/jobs/awaiting-verification", async (req, res) => {
   }
 });
 
-/**
- * GET /api/supervisor/jobs/:id
- * Returns full job (tracking) detail including photos and signature.
- */
 router.get("/jobs/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -349,7 +314,6 @@ router.get("/jobs/:id", async (req, res) => {
 
     const job = rows[0];
 
-    // Photos (tracking_doc attachments)
     const { rows: photos } = await db.query(
       `SELECT id, file_url
        FROM attachments
@@ -365,11 +329,6 @@ router.get("/jobs/:id", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/supervisor/jobs/:id/verify
- * Supervisor verifies a completed job → tracking.status = 'verified'.
- * Also sets form.status = 'completed' if not already.
- */
 router.patch("/jobs/:id/verify", async (req, res) => {
   const client = await db.connect();
   try {
@@ -378,7 +337,6 @@ router.patch("/jobs/:id/verify", async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Check job belongs to a form this supervisor owns
     const { rows } = await client.query(
       `SELECT t.id, t.form_id, t.status
        FROM tracking t
@@ -401,16 +359,13 @@ router.patch("/jobs/:id/verify", async (req, res) => {
         .json({ message: "Job must be completed before verifying." });
     }
 
-    // Update tracking to verified
     await client.query(
       "UPDATE tracking SET status = 'verified', updated_at = NOW() WHERE id = $1",
       [id],
     );
 
-    // Update form to completed if not already
     await client.query(
-      `UPDATE forms
-       SET status = 'completed', updated_at = NOW()
+      `UPDATE forms SET status = 'completed', updated_at = NOW()
        WHERE id = $1 AND status != 'completed'`,
       [job.form_id],
     );

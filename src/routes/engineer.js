@@ -8,11 +8,6 @@ router.use(requireRole("engineer"));
 
 // ─── FORMS ───────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/engineer/forms/assigned
- * Section 1: forms assigned to me by supervisor (pending)
- */
-
 router.get("/supervisors", async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -61,10 +56,6 @@ router.get("/forms/assigned", async (req, res) => {
   }
 });
 
-/**
- * GET /api/engineer/forms/mine
- * Section 2: self-requested forms (created_by = me)
- */
 router.get("/forms/mine", async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -91,10 +82,6 @@ router.get("/forms/mine", async (req, res) => {
   }
 });
 
-/**
- * GET /api/engineer/forms/:id
- * Full form detail
- */
 router.get("/forms/:id", async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -134,10 +121,6 @@ router.get("/forms/:id", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/engineer/forms/:id/accept
- * Engineer accepts a form assigned to them
- */
 router.patch("/forms/:id/accept", async (req, res) => {
   try {
     const { rowCount, rows } = await db.query(
@@ -155,7 +138,6 @@ router.patch("/forms/:id/accept", async (req, res) => {
         .status(404)
         .json({ message: "Form not found or not pending." });
 
-    // Auto-create tracking row with ongoing status
     await db.query(
       `INSERT INTO tracking (form_id, worker_id, status, started_at, updated_at)
        VALUES ($1, $2, 'ongoing', NOW(), NOW())`,
@@ -168,10 +150,7 @@ router.patch("/forms/:id/accept", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-/**
- * PATCH /api/engineer/forms/:id/reject
- * Engineer rejects a form assigned to them
- */
+
 router.patch("/forms/:id/reject", async (req, res) => {
   try {
     const { rowCount } = await db.query(
@@ -193,10 +172,7 @@ router.patch("/forms/:id/reject", async (req, res) => {
   }
 });
 
-/**
- * POST /api/engineer/forms
- * Self-request a form → goes to supervisor for review
- */ router.post("/forms", async (req, res) => {
+router.post("/forms", async (req, res) => {
   try {
     const engineerId = req.user.id;
     const {
@@ -223,7 +199,6 @@ router.patch("/forms/:id/reject", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    // Validate assigned_to is a supervisor in the same team
     const { rows: supRows } = await db.query(
       `SELECT u.id FROM users u
        JOIN users me ON me.team_id = u.team_id
@@ -267,36 +242,28 @@ router.patch("/forms/:id/reject", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-/**
- * PATCH /api/engineer/forms/:id
- * Edit and resubmit a rejected self-requested form
- */
 
 router.delete("/forms/:id", async (req, res) => {
   const engineerId = req.user.id;
   const { id } = req.params;
-
   try {
-    // Only allow delete if form exists, belongs to this engineer, and is pending
     const { rows } = await db.query(
       `SELECT * FROM forms WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
       [id, engineerId],
     );
-
     if (rows.length === 0) {
       return res
         .status(404)
         .json({ error: "Form not found or cannot be deleted." });
     }
-
     await db.query(`DELETE FROM forms WHERE id = $1`, [id]);
-
     res.json({ message: "Form deleted successfully." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error." });
   }
 });
+
 router.patch("/forms/:id", async (req, res) => {
   const engineerId = req.user.id;
   const { id } = req.params;
@@ -316,13 +283,11 @@ router.patch("/forms/:id", async (req, res) => {
       `SELECT * FROM forms WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
       [id, engineerId],
     );
-
     if (rows.length === 0) {
       return res
         .status(404)
         .json({ error: "Form not found or cannot be edited." });
     }
-
     const result = await db.query(
       `UPDATE forms
        SET title = $1, description = $2, client_name = $3, company_name = $4,
@@ -342,7 +307,6 @@ router.patch("/forms/:id", async (req, res) => {
         id,
       ],
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -352,29 +316,25 @@ router.patch("/forms/:id", async (req, res) => {
 
 // ─── JOBS (TRACKING) ─────────────────────────────────────────────────────────
 
-/**
- * GET /api/engineer/jobs
- * My active jobs (tracking rows where I am the worker, status = ongoing)
- */
 router.get("/jobs", async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT
-   t.id,
-   t.form_id,
-   t.status,
-   t.started_at,
-   t.latitude,
-   t.longitude,
-   f.title,
-   f.client_name,
-   f.company_name,
-   f.priority_level
- FROM tracking t
- JOIN forms f ON f.id = t.form_id
- WHERE t.worker_id = $1
-   AND t.status = 'ongoing'
- ORDER BY t.started_at DESC`,
+         t.id,
+         t.form_id,
+         t.status,
+         t.started_at,
+         t.latitude,
+         t.longitude,
+         f.title,
+         f.client_name,
+         f.company_name,
+         f.priority_level
+       FROM tracking t
+       JOIN forms f ON f.id = t.form_id
+       WHERE t.worker_id = $1
+         AND t.status = 'ongoing'
+       ORDER BY t.started_at DESC`,
       [req.user.id],
     );
     res.json(rows);
@@ -384,27 +344,28 @@ router.get("/jobs", async (req, res) => {
   }
 });
 
-/**
- * GET /api/engineer/jobs/:id
- * Full job detail
- */
 router.get("/jobs/:id", async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT
-         t.id          AS tracking_id,
+         t.id,
          t.form_id,
-         f.title       AS form_title,
-         f.client_name,
-         f.company_name,
-         f.status      AS form_status,
-         t.status      AS tracking_status,
+         t.status,
+         t.signature_url,
          t.latitude,
          t.longitude,
          t.started_at,
          t.ended_at,
          t.updated_at,
-         t.signature_url
+         f.title,
+         f.description,
+         f.client_name,
+         f.company_name,
+         f.priority_level,
+         f.date_from,
+         f.date_to,
+         f.duration,
+         f.comment
        FROM tracking t
        JOIN forms f ON f.id = t.form_id
        WHERE t.id = $1
@@ -416,12 +377,11 @@ router.get("/jobs/:id", async (req, res) => {
 
     const job = rows[0];
 
-    const { rows: photos } = await db.query(
-      `SELECT id, file_url FROM attachments
-       WHERE form_id = $1 AND type = 'tracking_doc'`,
+    const { rows: attachments } = await db.query(
+      `SELECT id, file_url, type FROM attachments WHERE form_id = $1`,
       [job.form_id],
     );
-    job.photos = photos;
+    job.attachments = attachments;
 
     res.json(job);
   } catch (err) {
@@ -430,22 +390,25 @@ router.get("/jobs/:id", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/engineer/jobs/:id/done
- * Mark job as completed
- */
 router.patch("/jobs/:id/done", async (req, res) => {
   try {
-    const { rowCount } = await db.query(
+    const { rows, rowCount } = await db.query(
       `UPDATE tracking
        SET status = 'completed', ended_at = NOW(), updated_at = NOW()
        WHERE id = $1
          AND worker_id = $2
-         AND status = 'ongoing'`,
+         AND status = 'ongoing'
+       RETURNING form_id`,
       [req.params.id, req.user.id],
     );
     if (!rowCount)
       return res.status(404).json({ message: "Job not found or not ongoing." });
+
+    await db.query(
+      `UPDATE forms SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+      [rows[0].form_id],
+    );
+
     res.json({ message: "Job marked as done." });
   } catch (err) {
     console.error(err);
@@ -453,10 +416,6 @@ router.patch("/jobs/:id/done", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/engineer/jobs/:id/location
- * Update live GPS location
- */
 router.patch("/jobs/:id/location", async (req, res) => {
   try {
     const { latitude, longitude } = req.body;
@@ -481,12 +440,29 @@ router.patch("/jobs/:id/location", async (req, res) => {
   }
 });
 
+router.patch("/jobs/:id", async (req, res) => {
+  const { id } = req.params;
+  const workerId = req.user.id;
+  const { signature_url } = req.body;
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE tracking SET signature_url = $1, updated_at = NOW()
+       WHERE id = $2 AND worker_id = $3 AND status != 'verified'`,
+      [signature_url, id, workerId],
+    );
+    if (!rowCount)
+      return res
+        .status(404)
+        .json({ message: "Job not found or already verified." });
+    res.json({ message: "Signature saved." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ─── RECORDS ─────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/engineer/records
- * All my forms filterable by status
- */
 router.get("/records", async (req, res) => {
   try {
     const { status } = req.query;
@@ -523,14 +499,11 @@ router.get("/records", async (req, res) => {
   }
 });
 
-// POST /api/engineer/attachments
 router.post("/attachments", async (req, res) => {
   const { form_id, urls, type = "form_doc" } = req.body;
-
   if (!form_id || !urls?.length) {
     return res.status(400).json({ message: "form_id and urls required." });
   }
-
   try {
     const inserts = urls.map((url) =>
       db.query(
@@ -547,12 +520,10 @@ router.post("/attachments", async (req, res) => {
   }
 });
 
-// DELETE /api/engineer/attachments/:id
 router.delete("/attachments/:id", async (req, res) => {
   try {
     const { rowCount } = await db.query(
-      `DELETE FROM attachments 
-       WHERE id = $1 AND uploaded_by = $2`,
+      `DELETE FROM attachments WHERE id = $1 AND uploaded_by = $2`,
       [req.params.id, req.user.id],
     );
     if (!rowCount)
@@ -563,24 +534,5 @@ router.delete("/attachments/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-router.patch("/jobs/:id", async (req, res) => {
-  const { id } = req.params;
-  const workerId = req.user.id;
-  const { signature_url } = req.body;
-  try {
-    const { rowCount } = await db.query(
-      `UPDATE tracking SET signature_url = $1, updated_at = NOW()
-       WHERE id = $2 AND worker_id = $3 AND status != 'verified'`,
-      [signature_url, id, workerId],
-    );
-    if (!rowCount)
-      return res
-        .status(404)
-        .json({ message: "Job not found or already verified." });
-    res.json({ message: "Signature saved." });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+
 module.exports = router;
