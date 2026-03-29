@@ -216,12 +216,13 @@ router.patch("/forms/:id/accept", async (req, res) => {
     const { id } = req.params;
     const supervisorId = req.user.id;
 
-    const { rowCount } = await db.query(
+    const { rowCount, rows } = await db.query(
       `UPDATE forms
        SET status = 'accepted', updated_at = NOW()
        WHERE id = $1 
          AND assigned_to = $2 
-         AND status = 'pending'`,
+         AND status = 'pending'
+       RETURNING id, assigned_to`,
       [id, supervisorId],
     );
 
@@ -230,13 +231,18 @@ router.patch("/forms/:id/accept", async (req, res) => {
         .status(404)
         .json({ message: "Form not found or not pending." });
 
+    await db.query(
+      `INSERT INTO tracking (form_id, worker_id, status, started_at, updated_at)
+       VALUES ($1, $2, 'ongoing', NOW(), NOW())`,
+      [rows[0].id, rows[0].assigned_to],
+    );
+
     res.json({ message: "Form accepted." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 });
-
 /**
  * PATCH /api/supervisor/forms/:id/reject
  * Supervisor rejects a pending form → status becomes 'rejected'.
