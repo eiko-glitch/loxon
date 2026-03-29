@@ -79,7 +79,7 @@ router.get("/forms/pending", async (req, res) => {
        FROM forms f
        JOIN users u ON u.id = f.assigned_to
        WHERE f.status = 'pending'
-         AND f.created_by = $1
+         AND f.assigned_to = $1
        ORDER BY
          CASE f.priority_level WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
          f.created_at DESC`,
@@ -92,7 +92,6 @@ router.get("/forms/pending", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 /**
  * GET /api/supervisor/forms/:id
  * Returns full form detail including attachments and linked tracking_id.
@@ -111,24 +110,21 @@ router.get("/forms/:id", async (req, res) => {
        JOIN users creator  ON creator.id  = f.created_by
        JOIN users assignee ON assignee.id = f.assigned_to
        WHERE f.id = $1
-         AND f.created_by = $2`,
+         AND (f.created_by = $2 OR f.assigned_to = $2)`,
       [id, supervisorId],
     );
 
-    if (!rows.length) {
+    if (!rows.length)
       return res.status(404).json({ message: "Form not found" });
-    }
 
     const form = rows[0];
 
-    // Attachments
     const { rows: attachments } = await db.query(
       "SELECT id, type, file_url FROM attachments WHERE form_id = $1",
       [id],
     );
     form.attachments = attachments;
 
-    // Linked tracking id (if any)
     const { rows: trackingRows } = await db.query(
       "SELECT id AS tracking_id FROM tracking WHERE form_id = $1 LIMIT 1",
       [id],
@@ -141,7 +137,6 @@ router.get("/forms/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 /**
  * POST /api/supervisor/forms
  * Create a new form and assign to a member.
@@ -224,15 +219,16 @@ router.patch("/forms/:id/accept", async (req, res) => {
     const { rowCount } = await db.query(
       `UPDATE forms
        SET status = 'accepted', updated_at = NOW()
-       WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
+       WHERE id = $1 
+         AND assigned_to = $2 
+         AND status = 'pending'`,
       [id, supervisorId],
     );
 
-    if (!rowCount) {
+    if (!rowCount)
       return res
         .status(404)
         .json({ message: "Form not found or not pending." });
-    }
 
     res.json({ message: "Form accepted." });
   } catch (err) {
@@ -253,15 +249,16 @@ router.patch("/forms/:id/reject", async (req, res) => {
     const { rowCount } = await db.query(
       `UPDATE forms
        SET status = 'rejected', updated_at = NOW()
-       WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
+       WHERE id = $1 
+         AND assigned_to = $2 
+         AND status = 'pending'`,
       [id, supervisorId],
     );
 
-    if (!rowCount) {
+    if (!rowCount)
       return res
         .status(404)
         .json({ message: "Form not found or not pending." });
-    }
 
     res.json({ message: "Form rejected." });
   } catch (err) {
