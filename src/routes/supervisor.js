@@ -284,6 +284,39 @@ router.get("/jobs/awaiting-verification", async (req, res) => {
   }
 });
 
+router.get("/jobs", async (req, res) => {
+  try {
+    const supervisorId = req.user.id;
+
+    const { rows } = await db.query(
+      `SELECT
+         t.id          AS tracking_id,
+         t.form_id,
+         t.status      AS tracking_status,
+         t.started_at,
+         t.latitude,
+         t.longitude,
+         f.title,
+         f.client_name,
+         f.company_name,
+         f.priority_level,
+         u.name        AS worker_name
+       FROM tracking t
+       JOIN forms f ON f.id = t.form_id
+       JOIN users u  ON u.id = t.worker_id
+       WHERE t.status = 'ongoing'
+         AND (f.created_by = $1 OR f.assigned_to = $1)
+       ORDER BY t.started_at DESC`,
+      [supervisorId],
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.get("/jobs/:id", async (req, res) => {
   try {
     const { id } = req.params;
