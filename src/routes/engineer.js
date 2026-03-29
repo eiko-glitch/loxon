@@ -360,20 +360,21 @@ router.get("/jobs", async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT
-         t.id          AS tracking_id,
-         t.form_id,
-         f.title       AS form_title,
-         f.client_name,
-         f.company_name,
-         t.status      AS tracking_status,
-         t.started_at,
-         t.latitude,
-         t.longitude
-       FROM tracking t
-       JOIN forms f ON f.id = t.form_id
-       WHERE t.worker_id = $1
-         AND t.status = 'ongoing'
-       ORDER BY t.started_at DESC`,
+   t.id,
+   t.form_id,
+   t.status,
+   t.started_at,
+   t.latitude,
+   t.longitude,
+   f.title,
+   f.client_name,
+   f.company_name,
+   f.priority_level
+ FROM tracking t
+ JOIN forms f ON f.id = t.form_id
+ WHERE t.worker_id = $1
+   AND t.status = 'ongoing'
+ ORDER BY t.started_at DESC`,
       [req.user.id],
     );
     res.json(rows);
@@ -562,5 +563,24 @@ router.delete("/attachments/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
+router.patch("/jobs/:id", async (req, res) => {
+  const { id } = req.params;
+  const workerId = req.user.id;
+  const { signature_url } = req.body;
+  try {
+    const { rowCount } = await db.query(
+      `UPDATE tracking SET signature_url = $1, updated_at = NOW()
+       WHERE id = $2 AND worker_id = $3 AND status != 'verified'`,
+      [signature_url, id, workerId],
+    );
+    if (!rowCount)
+      return res
+        .status(404)
+        .json({ message: "Job not found or already verified." });
+    res.json({ message: "Signature saved." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 module.exports = router;
