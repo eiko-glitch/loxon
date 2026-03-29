@@ -187,8 +187,7 @@ router.patch("/forms/:id/reject", async (req, res) => {
 /**
  * POST /api/engineer/forms
  * Self-request a form → goes to supervisor for review
- */
-router.post("/forms", async (req, res) => {
+ */ router.post("/forms", async (req, res) => {
   try {
     const engineerId = req.user.id;
     const {
@@ -201,30 +200,34 @@ router.post("/forms", async (req, res) => {
       date_to,
       duration,
       comment,
+      assigned_to,
     } = req.body;
 
-    if (!title || !client_name || !company_name || !date_from || !date_to) {
+    if (
+      !title ||
+      !client_name ||
+      !company_name ||
+      !date_from ||
+      !date_to ||
+      !assigned_to
+    ) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    // Find the engineer's supervisor (same team, role = supervisor)
+    // Validate assigned_to is a supervisor in the same team
     const { rows: supRows } = await db.query(
       `SELECT u.id FROM users u
        JOIN users me ON me.team_id = u.team_id
        WHERE me.id = $1
+         AND u.id = $2
          AND u.role = 'supervisor'
-         AND u.status != 'inactive'
-       LIMIT 1`,
-      [engineerId],
+         AND u.status != 'inactive'`,
+      [engineerId, assigned_to],
     );
 
     if (!supRows.length) {
-      return res
-        .status(400)
-        .json({ message: "No supervisor found in your team." });
+      return res.status(400).json({ message: "Invalid supervisor." });
     }
-
-    const supervisorId = supRows[0].id;
 
     const { rows } = await db.query(
       `INSERT INTO forms
@@ -234,7 +237,7 @@ router.post("/forms", async (req, res) => {
        RETURNING id`,
       [
         engineerId,
-        supervisorId,
+        assigned_to,
         title,
         description ?? null,
         client_name,
@@ -255,65 +258,86 @@ router.post("/forms", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 /**
  * PATCH /api/engineer/forms/:id
  * Edit and resubmit a rejected self-requested form
  */
-router.patch("/forms/:id", async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      client_name,
-      company_name,
-      priority_level,
-      date_from,
-      date_to,
-      duration,
-      comment,
-    } = req.body;
 
-    const { rowCount } = await db.query(
+router.delete("/forms/:id", async (req, res) => {
+  const engineerId = req.user.id;
+  const { id } = req.params;
+
+  try {
+    // Only allow delete if form exists, belongs to this engineer, and is pending
+    const { rows } = await db.query(
+      `SELECT * FROM forms WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
+      [id, engineerId],
+    );
+
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "Form not found or cannot be deleted." });
+    }
+
+    await db.query(`DELETE FROM forms WHERE id = $1`, [id]);
+
+    res.json({ message: "Form deleted successfully." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error." });
+  }
+});
+router.patch("/forms/:id", async (req, res) => {
+  const engineerId = req.user.id;
+  const { id } = req.params;
+  const {
+    title,
+    description,
+    client_name,
+    company_name,
+    date_from,
+    date_to,
+    duration,
+    priority_level,
+  } = req.body;
+
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM forms WHERE id = $1 AND created_by = $2 AND status = 'pending'`,
+      [id, engineerId],
+    );
+
+    if (rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "Form not found or cannot be edited." });
+    }
+
+    const result = await db.query(
       `UPDATE forms
-       SET
-         title          = COALESCE($1, title),
-         description    = COALESCE($2, description),
-         client_name    = COALESCE($3, client_name),
-         company_name   = COALESCE($4, company_name),
-         priority_level = COALESCE($5, priority_level),
-         date_from      = COALESCE($6, date_from),
-         date_to        = COALESCE($7, date_to),
-         duration       = COALESCE($8, duration),
-         comment        = COALESCE($9, comment),
-         status         = 'pending',
-         updated_at     = NOW()
-       WHERE id = $10
-         AND created_by = $11
-         AND status = 'rejected'`,
+       SET title = $1, description = $2, client_name = $3, company_name = $4,
+           date_from = $5, date_to = $6, duration = $7, priority_level = $8,
+           updated_at = NOW()
+       WHERE id = $9
+       RETURNING *`,
       [
         title,
         description,
         client_name,
         company_name,
-        priority_level,
         date_from,
         date_to,
         duration,
-        comment,
-        req.params.id,
-        req.user.id,
+        priority_level,
+        id,
       ],
     );
 
-    if (!rowCount)
-      return res
-        .status(404)
-        .json({ message: "Form not found or not editable." });
-    res.json({ message: "Form resubmitted." });
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ error: "Server error." });
   }
 });
 
