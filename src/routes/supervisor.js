@@ -316,7 +316,6 @@ router.get("/jobs", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 router.get("/jobs/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -330,6 +329,12 @@ router.get("/jobs/:id", async (req, res) => {
          f.client_name,
          f.company_name,
          f.status      AS form_status,
+         f.priority_level,
+         f.date_from,
+         f.date_to,
+         f.duration,
+         f.description,
+         f.comment,
          u.name        AS worker_name,
          t.status      AS tracking_status,
          t.latitude,
@@ -342,7 +347,7 @@ router.get("/jobs/:id", async (req, res) => {
        JOIN forms f ON f.id = t.form_id
        JOIN users u  ON u.id = t.worker_id
        WHERE t.id = $1
-         AND f.created_by = $2`,
+         AND (f.created_by = $2 OR f.assigned_to = $2)`,
       [id, supervisorId],
     );
 
