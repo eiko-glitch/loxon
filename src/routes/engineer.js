@@ -140,17 +140,14 @@ router.get("/forms/:id", async (req, res) => {
  */
 router.patch("/forms/:id/accept", async (req, res) => {
   try {
-    const { id } = req.params;
-    const supervisorId = req.user.id;
-
     const { rowCount, rows } = await db.query(
       `UPDATE forms
        SET status = 'accepted', updated_at = NOW()
-       WHERE id = $1 
-         AND assigned_to = $2 
+       WHERE id = $1
+         AND assigned_to = $2
          AND status = 'pending'
-       RETURNING id, assigned_to`,
-      [id, supervisorId],
+       RETURNING id`,
+      [req.params.id, req.user.id],
     );
 
     if (!rowCount)
@@ -158,11 +155,11 @@ router.patch("/forms/:id/accept", async (req, res) => {
         .status(404)
         .json({ message: "Form not found or not pending." });
 
-    // Create tracking row
+    // Auto-create tracking row with ongoing status
     await db.query(
       `INSERT INTO tracking (form_id, worker_id, status, started_at, updated_at)
        VALUES ($1, $2, 'ongoing', NOW(), NOW())`,
-      [rows[0].id, rows[0].assigned_to],
+      [rows[0].id, req.user.id],
     );
 
     res.json({ message: "Form accepted." });
