@@ -328,8 +328,6 @@ router.get("/jobs/:id", async (req, res) => {
          f.title       AS form_title,
          f.client_name,
          f.company_name,
-   
-  t.status AS tracking_status,  // 
          f.priority_level,
          f.date_from,
          f.date_to,
@@ -351,11 +349,6 @@ router.get("/jobs/:id", async (req, res) => {
          AND (f.created_by = $2 OR f.assigned_to = $2)`,
       [id, supervisorId],
     );
-    const { rows: answers } = await db.query(
-      `SELECT field_key, field_value FROM tracking_answers WHERE tracking_id = $1`,
-      [job.tracking_id], // or req.params.id
-    );
-    job.survey_answers = answers;
 
     if (!rows.length) {
       return res.status(404).json({ message: "Job not found" });
@@ -364,12 +357,18 @@ router.get("/jobs/:id", async (req, res) => {
     const job = rows[0];
 
     const { rows: photos } = await db.query(
-      `SELECT id, file_url
-       FROM attachments
+      `SELECT id, file_url FROM attachments
        WHERE form_id = $1 AND type = 'tracking_doc'`,
       [job.form_id],
     );
     job.photos = photos;
+
+    const { rows: answers } = await db.query(
+      `SELECT field_key, field_value FROM tracking_answers
+       WHERE tracking_id = $1`,
+      [job.tracking_id],
+    );
+    job.survey_answers = answers;
 
     res.json(job);
   } catch (err) {
@@ -377,7 +376,6 @@ router.get("/jobs/:id", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 router.patch("/jobs/:id/verify", async (req, res) => {
   const client = await db.connect();
   try {
