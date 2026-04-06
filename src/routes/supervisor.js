@@ -272,7 +272,7 @@ router.get("/jobs/awaiting-verification", async (req, res) => {
        JOIN forms f ON f.id = t.form_id
        JOIN users u  ON u.id = t.worker_id
        WHERE t.status = 'completed'
-         AND f.created_by = $1
+         AND (f.created_by = $1 OR f.assigned_to = $1)
        ORDER BY t.ended_at DESC`,
       [supervisorId],
     );
