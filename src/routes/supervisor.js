@@ -328,7 +328,8 @@ router.get("/jobs/:id", async (req, res) => {
          f.title       AS form_title,
          f.client_name,
          f.company_name,
-         f.status      AS form_status,
+   
+  t.status AS tracking_status,  // 
          f.priority_level,
          f.date_from,
          f.date_to,
