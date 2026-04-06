@@ -389,32 +389,42 @@ router.get("/jobs/:id", async (req, res) => {
   }
 });
 
-router.patch("/jobs/:id/done", async (req, res) => {
+// PATCH /api/engineer/jobs/:id/done
+router.patch("/:id/done", async (req, res) => {
+  const trackingId = Number(req.params.id);
+  const { answers } = req.body;
+  // answers: [{ field_key: "work_quality", field_value: "4" }, ...]
+
+  const client = await db.connect();
   try {
-    const { rows, rowCount } = await db.query(
-      `UPDATE tracking
-       SET status = 'completed', ended_at = NOW(), updated_at = NOW()
-       WHERE id = $1
-         AND worker_id = $2
-         AND status = 'ongoing'
-       RETURNING form_id`,
-      [req.params.id, req.user.id],
-    );
-    if (!rowCount)
-      return res.status(404).json({ message: "Job not found or not ongoing." });
+    await client.query("BEGIN");
 
-    await db.query(
-      `UPDATE forms SET status = 'completed', updated_at = NOW() WHERE id = $1`,
-      [rows[0].form_id],
+    await client.query(
+      `UPDATE tracking SET status = 'completed', ended_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND worker_id = $2`,
+      [trackingId, req.user.id],
     );
 
-    res.json({ message: "Job marked as done." });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    if (answers?.length) {
+      for (const a of answers) {
+        await client.query(
+          `INSERT INTO tracking_answers (tracking_id, field_key, field_value)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (tracking_id, field_key) DO UPDATE SET field_value = $3`,
+          [trackingId, a.field_key, String(a.field_value)],
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: "Failed to complete job" });
+  } finally {
+    client.release();
   }
 });
-
 router.patch("/jobs/:id/location", async (req, res) => {
   try {
     const { latitude, longitude } = req.body;
