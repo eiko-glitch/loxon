@@ -384,7 +384,7 @@ router.patch("/jobs/:id/verify", async (req, res) => {
       `SELECT t.id, t.form_id, t.status
        FROM tracking t
        JOIN forms f ON f.id = t.form_id
-       WHERE t.id = $1 AND f.created_by = $2`,
+       WHERE t.id = $1 AND (f.created_by = $2 OR f.assigned_to = $2)`, // ← fix here
       [id, supervisorId],
     );
 
