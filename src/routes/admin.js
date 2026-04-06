@@ -14,6 +14,7 @@ router.get("/dashboard", async (req, res) => {
       { rows: formsByStatus },
       { rows: recentForms },
       { rows: recentJobs },
+      { rows: completionStats },
     ] = await Promise.all([
       db.query(`
         SELECT
@@ -51,6 +52,21 @@ router.get("/dashboard", async (req, res) => {
         ORDER BY t.started_at DESC
         LIMIT 10
       `),
+      db.query(`
+        SELECT
+          u.name AS worker_name,
+          f.title,
+          f.priority_level,
+          t.started_at,
+          t.ended_at,
+          ROUND(EXTRACT(EPOCH FROM (t.ended_at - t.started_at)) / 3600, 1) AS hours_taken
+        FROM tracking t
+        JOIN users u ON u.id = t.worker_id
+        JOIN forms f ON f.id = t.form_id
+        WHERE t.status IN ('completed', 'verified')
+          AND t.ended_at IS NOT NULL
+        ORDER BY t.ended_at DESC
+      `),
     ]);
 
     res.json({
@@ -58,6 +74,7 @@ router.get("/dashboard", async (req, res) => {
       formsByStatus,
       recentForms,
       recentJobs,
+      completionStats,
     });
   } catch (err) {
     console.error(err);
