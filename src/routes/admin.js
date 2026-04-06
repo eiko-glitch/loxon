@@ -7,6 +7,64 @@ const { requireRole } = require("../middleware/requireAuth");
 
 router.use(requireRole("admin"));
 
+router.get("/dashboard", async (req, res) => {
+  try {
+    const [
+      { rows: totals },
+      { rows: formsByStatus },
+      { rows: recentForms },
+      { rows: recentJobs },
+    ] = await Promise.all([
+      db.query(`
+        SELECT
+          (SELECT COUNT(*) FROM users WHERE status != 'inactive') AS total_users,
+          (SELECT COUNT(*) FROM users WHERE role = 'engineer' AND status != 'inactive') AS total_engineers,
+          (SELECT COUNT(*) FROM users WHERE role = 'supervisor' AND status != 'inactive') AS total_supervisors,
+          (SELECT COUNT(*) FROM teams) AS total_teams,
+          (SELECT COUNT(*) FROM forms) AS total_forms,
+          (SELECT COUNT(*) FROM tracking WHERE status = 'ongoing') AS active_jobs
+      `),
+      db.query(`
+        SELECT status, COUNT(*) AS count
+        FROM forms
+        GROUP BY status
+      `),
+      db.query(`
+        SELECT
+          f.id, f.title, f.status, f.priority_level, f.created_at,
+          creator.name AS created_by_name,
+          assignee.name AS assigned_to_name
+        FROM forms f
+        JOIN users creator ON creator.id = f.created_by
+        JOIN users assignee ON assignee.id = f.assigned_to
+        ORDER BY f.created_at DESC
+        LIMIT 10
+      `),
+      db.query(`
+        SELECT
+          t.id, t.status AS tracking_status, t.started_at, t.ended_at,
+          f.title, f.priority_level,
+          u.name AS worker_name
+        FROM tracking t
+        JOIN forms f ON f.id = t.form_id
+        JOIN users u ON u.id = t.worker_id
+        ORDER BY t.started_at DESC
+        LIMIT 10
+      `),
+    ]);
+
+    res.json({
+      totals: totals[0],
+      formsByStatus,
+      recentForms,
+      recentJobs,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ─── TEAMS ───────────────────────────────────────────────────────────────────
 
 // GET /api/admin/teams
