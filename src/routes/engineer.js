@@ -390,7 +390,7 @@ router.get("/jobs/:id", async (req, res) => {
 });
 
 // PATCH /api/engineer/jobs/:id/done
-router.patch("/:id/done", async (req, res) => {
+router.patch("/jobs/:id/done", async (req, res) => {
   const trackingId = Number(req.params.id);
   const { answers } = req.body;
   // answers: [{ field_key: "work_quality", field_value: "4" }, ...]
