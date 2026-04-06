@@ -388,6 +388,20 @@ router.get("/jobs/:id", async (req, res) => {
   }
 });
 
+router.get("/jobs/:id/answers", async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT field_key, field_value FROM tracking_answers
+       WHERE tracking_id = $1`,
+      [req.params.id],
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // PATCH /api/engineer/jobs/:id/done
 router.patch("/jobs/:id/done", async (req, res) => {
   const trackingId = Number(req.params.id);
@@ -470,7 +484,6 @@ router.patch("/jobs/:id", async (req, res) => {
 });
 
 // ─── RECORDS ─────────────────────────────────────────────────────────────────
-
 router.get("/records", async (req, res) => {
   try {
     const { status } = req.query;
@@ -485,9 +498,12 @@ router.get("/records", async (req, res) => {
         f.date_from,
         f.date_to,
         f.created_at,
-        u.name AS created_by_name
+        u.name AS created_by_name,
+        t.id          AS tracking_id,
+        t.status      AS tracking_status
       FROM forms f
       JOIN users u ON u.id = f.created_by
+      LEFT JOIN tracking t ON t.form_id = f.id
       WHERE (f.assigned_to = $1 OR f.created_by = $1)
     `;
     const params = [req.user.id];
@@ -506,7 +522,6 @@ router.get("/records", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 router.post("/attachments", async (req, res) => {
   const { form_id, urls, type = "form_doc" } = req.body;
   if (!form_id || !urls?.length) {
