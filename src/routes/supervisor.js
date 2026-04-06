@@ -247,7 +247,7 @@ router.patch("/forms/:id/accept", async (req, res) => {
 
     const { rowCount, rows } = await db.query(
       `UPDATE forms
-       SET status = 'accepted', updated_at = NOW()
+       SET status = 'ongoing', updated_at = NOW()
        WHERE id = $1
          AND (assigned_to = $2 OR created_by = $2)
          AND status = 'pending'
