@@ -350,6 +350,11 @@ router.get("/jobs/:id", async (req, res) => {
          AND (f.created_by = $2 OR f.assigned_to = $2)`,
       [id, supervisorId],
     );
+    const { rows: answers } = await db.query(
+      `SELECT field_key, field_value FROM tracking_answers WHERE tracking_id = $1`,
+      [job.tracking_id], // or req.params.id
+    );
+    job.survey_answers = answers;
 
     if (!rows.length) {
       return res.status(404).json({ message: "Job not found" });
