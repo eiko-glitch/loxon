@@ -6,6 +6,59 @@ const { requireRole } = require("../middleware/requireAuth");
 
 router.use(requireRole("supervisor"));
 
+// ─── RECORDS ─────────────────────────────────────────────────────────────────
+router.get("/records", async (req, res) => {
+  try {
+    const supervisorId = req.user.id;
+    const { status, date_from, date_to } = req.query;
+
+    let query = `
+      SELECT
+        f.id,
+        f.title,
+        f.client_name,
+        f.company_name,
+        f.priority_level,
+        f.status,
+        f.date_from,
+        f.date_to,
+        f.created_at,
+        creator.name  AS created_by_name,
+        assignee.name AS assigned_to_name,
+        t.id          AS tracking_id,
+        t.status      AS tracking_status
+      FROM forms f
+      JOIN users creator  ON creator.id  = f.created_by
+      JOIN users assignee ON assignee.id = f.assigned_to
+      LEFT JOIN tracking t ON t.form_id = f.id
+      WHERE (f.created_by = $1 OR assignee.team_id = (
+        SELECT team_id FROM users WHERE id = $1
+      ))
+    `;
+    const params = [supervisorId];
+
+    if (status) {
+      params.push(status);
+      query += ` AND f.status = $${params.length}`;
+    }
+    if (date_from) {
+      params.push(date_from);
+      query += ` AND f.date_from >= $${params.length}`;
+    }
+    if (date_to) {
+      params.push(date_to);
+      query += ` AND f.date_to <= $${params.length}`;
+    }
+
+    query += ` ORDER BY f.created_at DESC`;
+
+    const { rows } = await db.query(query, params);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 // ─── MEMBERS ─────────────────────────────────────────────────────────────────
 
 router.get("/members", async (req, res) => {
