@@ -415,7 +415,12 @@ router.get("/jobs/:id", async (req, res) => {
       [job.form_id],
     );
     job.photos = photos;
-
+const { rows: formPhotos } = await db.query(
+  `SELECT id, file_url FROM attachments
+   WHERE form_id = $1 AND type = 'form_doc'`,
+  [job.form_id],
+);
+job.form_photos = formPhotos;
     const { rows: answers } = await db.query(
       `SELECT field_key, field_value FROM tracking_answers
        WHERE tracking_id = $1`,
