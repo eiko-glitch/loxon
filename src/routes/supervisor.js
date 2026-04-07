@@ -434,6 +434,33 @@ job.form_photos = formPhotos;
     res.status(500).json({ message: "Server error" });
   }
 });
+
+router.post("/attachments", async (req, res) => {
+  try {
+    const { form_id, urls, type } = req.body;
+    if (!form_id || !urls || !Array.isArray(urls) || urls.length === 0) {
+      return res.status(400).json({ message: "Missing fields." });
+    }
+
+    const uploadedBy = req.user.id;
+
+    await Promise.all(
+      urls.map((url) =>
+        db.query(
+          `INSERT INTO attachments (form_id, type, uploaded_by, file_url)
+           VALUES ($1, $2, $3, $4)`,
+          [form_id, type ?? "form_doc", uploadedBy, url]
+        )
+      )
+    );
+
+    res.status(201).json({ message: "Attachments saved." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 router.patch("/jobs/:id/verify", async (req, res) => {
   const client = await db.connect();
   try {
