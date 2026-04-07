@@ -6,7 +6,7 @@ const { requireAuth } = require("../middleware/requireAuth");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "default_secret_key";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1d";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "2d";
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;

@@ -401,21 +401,26 @@ router.get("/jobs/:id/answers", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
-// PATCH /api/engineer/jobs/:id/done
 router.patch("/jobs/:id/done", async (req, res) => {
   const trackingId = Number(req.params.id);
   const { answers } = req.body;
-  // answers: [{ field_key: "work_quality", field_value: "4" }, ...]
 
   const client = await db.connect();
   try {
     await client.query("BEGIN");
 
+    // mark tracking complete
     await client.query(
       `UPDATE tracking SET status = 'completed', ended_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND worker_id = $2`,
-      [trackingId, req.user.id],
+      [trackingId, req.user.id]
+    );
+
+    // ✅ also mark the parent form complete
+    await client.query(
+      `UPDATE forms SET status = 'completed', updated_at = NOW()
+       WHERE id = (SELECT form_id FROM tracking WHERE id = $1)`,
+      [trackingId]
     );
 
     if (answers?.length) {
@@ -424,7 +429,7 @@ router.patch("/jobs/:id/done", async (req, res) => {
           `INSERT INTO tracking_answers (tracking_id, field_key, field_value)
            VALUES ($1, $2, $3)
            ON CONFLICT (tracking_id, field_key) DO UPDATE SET field_value = $3`,
-          [trackingId, a.field_key, String(a.field_value)],
+          [trackingId, a.field_key, String(a.field_value)]
         );
       }
     }
